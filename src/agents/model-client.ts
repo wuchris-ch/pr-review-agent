@@ -9,8 +9,8 @@ import { REVIEW_SYSTEM_PROMPT } from './system-prompt.js';
 
 const MAX_INPUT_BYTES = 128 * 1024;
 const MAX_RESPONSE_BYTES = 1024 * 1024;
-const REQUEST_TIMEOUT_MS = 50_000;
-const MAX_REQUEST_ATTEMPTS = 2;
+const REQUEST_TIMEOUT_MS = 35_000;
+const MAX_REQUEST_ATTEMPTS = 3;
 
 class RetryableModelRequestError extends Error {}
 
