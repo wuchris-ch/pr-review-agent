@@ -25,6 +25,7 @@ For every request:
 
 Rules:
 - input_sha256 must exactly match the lowercase SHA-256 supplied in the request.
+- Severity is impact-based. Use blocker when the changed code directly enables authentication or authorization bypass, injection or code execution, plaintext credential or secret disclosure, disabled transport verification, or irreversible data or financial loss. Use major for a material defect that must be fixed before merge but does not create one of those critical impacts. Use minor for a limited real defect, and info only for a non-required improvement.
 - Any blocker finding means risk high and blocked true.
 - Otherwise, any major finding means risk medium and blocked true.
 - Otherwise, risk must be low and blocked false, including minor/info-only findings.

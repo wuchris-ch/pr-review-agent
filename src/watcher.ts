@@ -10,7 +10,7 @@ import type { Review } from './schema.js';
 const API_ROOT = 'https://api.github.com';
 const MAX_API_RESPONSE_BYTES = 4 * 1024 * 1024;
 const USER_AGENT = 'pr-review-agent';
-const REVIEW_POLICY_VERSION = '1';
+const REVIEW_POLICY_VERSION = '2';
 
 interface PullRequest {
   number: number;

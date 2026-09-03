@@ -10,4 +10,13 @@ describe('review system prompt', () => {
       'Do not infer compromise solely from a transitive package name.',
     );
   });
+
+  it('defines critical severity by concrete impact', () => {
+    expect(REVIEW_SYSTEM_PROMPT).toContain(
+      'plaintext credential or secret disclosure',
+    );
+    expect(REVIEW_SYSTEM_PROMPT).toContain(
+      'Use major for a material defect that must be fixed before merge',
+    );
+  });
 });

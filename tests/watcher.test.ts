@@ -25,6 +25,6 @@ describe('pull request watcher', () => {
     const body = formatAutomatedReview(review, headSha);
 
     expect(body).toContain('No findings.');
-    expect(body).toContain(`<!-- pr-review-agent head:${headSha} policy:1 -->`);
+    expect(body).toContain(`<!-- pr-review-agent head:${headSha} policy:2 -->`);
   });
 });
