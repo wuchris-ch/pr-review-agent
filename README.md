@@ -1,19 +1,133 @@
 # PR Review Agent
 
-A focused pull-request review agent. It reviews a raw unified diff for security
-vulnerabilities and correctness defects, then emits one machine-readable JSON
-verdict.
+[![CI](https://github.com/wuchris-ch/pr-review-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/wuchris-ch/pr-review-agent/actions/workflows/ci.yml)
+[![Node.js 22](https://img.shields.io/badge/node.js-22-339933)](package.json)
+[![Apache 2.0](https://img.shields.io/badge/license-Apache--2.0-2f855a)](LICENSE)
 
-![Pull request review agent flow](docs/pr-review-flow.svg)
+A focused security and correctness reviewer for pull requests. It accepts an
+exact unified diff, runs a bounded model review, validates every verdict against
+a strict contract, and produces machine-readable findings suitable for local
+development, CI, or continuous GitHub review.
 
-## Output contract
+![Pull request review agent architecture](docs/pr-review-flow.svg)
 
-Successful runs write only this JSON shape to standard output:
+## Validated quality
+
+The agent is tested by the independent
+[`agent-eval-k3s`](https://github.com/wuchris-ch/agent-eval-k3s) harness against
+20 versioned golden diffs across three trial rounds. The result below was
+recorded on September 3, 2026 with `gemini-3.8-flash`.
+
+| Metric | Latest release-quality result |
+|---|---:|
+| Release gate | **PASS** |
+| Average score | **1.000** |
+| Accepted evaluations | **60/60** |
+| Security-blocker recall | **100%** (21/21) |
+| Clean-diff accuracy | **100%** (21/21) |
+| Case stability | **100%** (20/20) |
+| Infrastructure errors | **0** |
+
+The evaluator, corpus, scoring policy, and results live outside this repository,
+so the reviewed agent cannot see the goldens or alter its grade. See the
+[complete versioned result](https://github.com/wuchris-ch/agent-eval-k3s/blob/main/benchmarks/reviewer-corpus/v1/results/2026-09-03.md).
+
+## Why this is more than an LLM prompt
+
+- **Exact input binding.** Every verdict carries the SHA-256 of the raw diff it
+  reviewed.
+- **Bounded execution.** Input, output, request size, retries, and runtime all
+  have explicit limits.
+- **Large-diff handling.** Multi-file diffs are partitioned at file boundaries
+  and merged deterministically.
+- **Strict validation.** Unknown fields, inconsistent severity, wrong digests,
+  invalid paths, duplicate keys, and trailing text fail closed.
+- **Repository-aware review.** Optional root `AGENTS.md` guidance can influence
+  priorities but cannot change system rules or the output contract.
+- **Restart-safe automation.** The watcher records a versioned head-SHA marker
+  in GitHub and does not duplicate the same review after restarting.
+- **Privacy-aware telemetry.** OpenTelemetry captures operational metadata, not
+  source diffs, prompts, completions, credentials, endpoints, or usernames.
+
+## Quick start
+
+Requirements:
+
+- Node.js 22 or newer
+- An OpenAI-compatible model gateway
+- GitHub CLI authenticated with `gh auth login` for remote PR commands
+
+```sh
+npm ci
+npm run build
+npm link
+```
+
+Configure the model gateway through your shell or local secret manager:
+
+```sh
+export MODEL_GATEWAY_API_KEY="..."
+export MODEL_GATEWAY_BASE_URL="https://gateway.example/v1"
+export REVIEW_AGENT_MODEL="your-model-id"
+```
+
+### Review the current branch
+
+From any Git repository:
+
+```sh
+pr-review
+```
+
+The command compares the current branch and working tree with `origin/main` and
+uses a root `AGENTS.md` when present. Override the base only when needed:
+
+```sh
+pr-review --base develop
+```
+
+### Review an existing GitHub PR
+
+```sh
+pr-review-pr 42
+```
+
+This fetches the PR diff without switching branches or changing the working
+tree. It prints locally by default. Publishing is explicit:
+
+```sh
+pr-review-pr 42 --publish
+pr-review-pr 42 --repo owner/repository --publish
+```
+
+Publishing creates a non-approving review comment. It never merges, approves,
+or requests changes.
+
+### Run continuous reviews
+
+```sh
+export GITHUB_TOKEN="..."
+export GITHUB_REPOSITORIES="owner/one,owner/two"
+pr-review-watch
+```
+
+The watcher polls every 60 seconds, reviews each new PR head SHA once per policy
+version, posts a comment, and sets `PR review agent` to success or failure. A
+model or contract failure produces an error status and is retried on the next
+poll.
+
+The companion evaluation repository provides the complete local k3s deployment
+with Kubernetes Secrets, automatic restarts, nightly evaluation, persistent
+reports, OpenTelemetry, and Phoenix.
+
+## Verdict contract
+
+Successful runs emit one JSON object:
 
 ```json
 {
   "schema_version": "1.0",
-  "input_sha256": "d68448f3c511ff0b58014574b183efef31c38752d2cb5bd5eed27a0ce1c5a60b",
+  "input_sha256": "<SHA-256 of the exact raw diff>",
   "risk": "high",
   "blocked": true,
   "findings": [
@@ -22,195 +136,69 @@ Successful runs write only this JSON shape to standard output:
       "category": "security",
       "file": "src/database.ts",
       "line": 42,
-      "detail": "User-controlled input is interpolated directly into a SQL query."
+      "detail": "User input reaches a SQL query without parameterization."
     }
   ],
-  "rationale": "The change introduces a directly exploitable SQL injection vulnerability."
+  "rationale": "The change introduces an exploitable SQL injection path."
 }
 ```
 
-The agent fails closed:
+Severity determines the decision:
 
-- A `blocker` or `major` finding requires `blocked: true`.
-- `blocked: true` requires at least one `blocker` or `major` finding.
-- Risk is deterministic: any blocker is `high`; otherwise any major is `medium`; otherwise risk is `low` and the review is not blocked.
-- Missing, malformed, or inconsistent model output exits nonzero.
-- Invalid JSON formatting receives one bounded retry, then fails closed.
-- `input_sha256` must match the SHA-256 of the exact raw diff bytes.
-- There is no low-risk fallback.
+| Highest finding | Risk | Blocked |
+|---|---|---|
+| `blocker` | `high` | `true` |
+| `major` | `medium` | `true` |
+| `minor`, `info`, or none | `low` | `false` |
 
-## Requirements
+There is no clean fallback. Empty input, invalid UTF-8, model failure, malformed
+JSON, a mismatched digest, or an inconsistent verdict exits nonzero.
 
-- Node.js 22 or newer
-- An OpenAI-compatible model gateway
-- GitHub CLI, authenticated with `gh auth login`, for remote pull requests
+## Execution boundaries
 
-Install dependencies and build:
+- Raw input is capped at 1 MiB and hashed before UTF-8 decoding.
+- Model messages are capped at 96 KiB and outputs at 1 MiB.
+- Each gateway attempt has a 35-second timeout and transient errors receive at
+  most three attempts within the outer process boundary.
+- A single file that cannot fit one partition fails closed.
+- Model children receive an allowlisted environment.
+- Findings may only reference files present in the reviewed partition.
+- Optional evaluator feedback is bounded and never changes the diff or schema.
 
-```bash
-npm ci
-npm run build
-```
+## OpenTelemetry
 
-Copy `.env.example` into your preferred local secret manager or shell configuration. The CLI reads environment variables directly and does not load `.env` files itself.
+Tracing activates when an OTLP endpoint is configured:
 
-Required configuration:
-
-```bash
-export MODEL_GATEWAY_API_KEY="..."
-export MODEL_GATEWAY_BASE_URL="https://gateway.example/v1"
-export REVIEW_AGENT_MODEL="your-model-id"
-```
-
-## Usage
-
-For the simplest workflow, install the local command once:
-
-```bash
-npm link
-```
-
-Then enter any Git repository and run:
-
-```bash
-pr-review
-```
-
-The command compares the current branch and working tree with `origin/main`,
-automatically uses a root `AGENTS.md` when present, and prints the review. It
-falls back to `main`, `origin/master`, or `master` when needed. Override the
-base branch only when necessary:
-
-```bash
-pr-review --base develop
-```
-
-Review an existing GitHub pull request without switching branches or changing
-the working tree:
-
-```bash
-pr-review-pr 42
-```
-
-The command uses the authenticated GitHub CLI to fetch the remote diff. It
-prints the review locally and does not modify the pull request by default. To
-also publish a non-blocking review comment on GitHub:
-
-```bash
-pr-review-pr 42 --publish
-```
-
-Publishing uses the identity currently authenticated by `gh`. It submits a
-comment only. It never approves the pull request or requests changes. Run from
-the target repository to load its root `AGENTS.md`. A repository can also be
-selected explicitly without checking it out:
-
-```bash
-pr-review-pr 42 --repo owner/repository
-```
-
-When `--repo` targets a repository that is not checked out, no local
-`AGENTS.md` is loaded.
-
-### Continuous pull request reviews
-
-`pr-review-watch` polls a comma-separated repository list and reviews each new
-pull request head SHA once per review-policy version. It publishes a review
-comment and commit status, then recognizes its versioned marker after restarts
-so it does not duplicate the same review. Updating the policy version allows a
-corrected policy to re-check an unchanged head.
-
-```bash
-export GITHUB_TOKEN="..."
-export GITHUB_REPOSITORIES="owner/one,owner/two"
-pr-review-watch
-```
-
-The companion evaluation repository includes a local k3s deployment that
-builds this watcher, stores credentials in a Kubernetes Secret, and sends
-metadata-only traces through an OpenTelemetry privacy filter.
-
-The lower-level commands below remain available for automation and evaluation.
-
-Pass a unified diff on standard input:
-
-```bash
-git diff origin/main...HEAD | npm run --silent review
-```
-
-Or read it from a file:
-
-```bash
-npm run --silent review -- --diff ./change.diff
-```
-
-Optionally supply repository-specific review guidance, such as an `AGENTS.md`
-file. Guidance is treated as untrusted context and cannot change the output
-contract or system rules:
-
-```bash
-git diff origin/main...HEAD | npm run --silent review -- \
-  --instructions ./AGENTS.md
-```
-
-On success, standard output contains only the JSON verdict. Diagnostics go to standard error. An empty diff, a model failure, or invalid model output exits nonzero.
-
-Input must be valid UTF-8 and is capped at 1 MiB. The SHA-256 is computed from the exact input bytes before decoding. Large multi-file diffs are divided at file boundaries into bounded model requests, then merged deterministically. A single file that cannot fit in one request fails closed. Repository guidance is capped at 16 KiB. Model output is capped at 1 MiB per request, and each request is capped at 120 seconds.
-
-The model client makes up to three bounded attempts for transient timeouts, rate
-limits, network failures, or server errors within the same 120-second
-fail-closed boundary. Authentication, request-shape, and invalid-output
-failures are not retried.
-
-An evaluator may set `AGENT_EVAL_FEEDBACK` for a retry. Nonempty feedback is supplied to the model as additional review guidance without changing the diff or output schema. The CLI never prints feedback, case identifiers, expected findings, or scoring thresholds.
-
-The model child receives only system essentials, the required gateway variables,
-the model identifier, and an allowlist of non-secret OTel transport settings.
-Exporter headers and resource attributes are excluded. Evaluator feedback is
-embedded in the request and is not copied into the child environment.
-
-## Optional OpenTelemetry
-
-Tracing is enabled when either `OTEL_EXPORTER_OTLP_ENDPOINT` or `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` is set. Configuration uses standard OpenTelemetry environment variables:
-
-```bash
+```sh
 export OTEL_SERVICE_NAME="pr-review-agent"
 export OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:4318"
 export OTEL_EXPORTER_OTLP_PROTOCOL="http/protobuf"
 ```
 
-No telemetry backend is required for normal operation.
-
-Telemetry is implemented with a manual metadata-only span, and OpenTelemetry
-resource auto-detection is disabled. Traces contain request status, latency,
-the public model alias, and the input byte count. Raw diffs, prompts, model
-output, credentials, endpoints, process arguments, local paths, and usernames
-are not exported. Review input is sent to the isolated model child over standard
-input, so it is not exposed in the child process arguments.
+The manual span contains request status, latency, attempt count, model alias,
+and input byte count. Resource auto-detection is disabled, and review content is
+sent to the isolated child through standard input instead of process arguments.
 
 ## Design influences
 
-This agent independently applies three proven ideas documented by
-[PR-Agent](https://github.com/qodo-ai/pr-agent): bounded handling of large pull
-requests, repository-specific context, and a self-check that removes unsupported
-or duplicate findings. It keeps a smaller scope and its own strict JSON,
-digest-binding, fail-closed, and telemetry privacy controls. No PR-Agent source
-code is included.
+The implementation applies proven ideas documented by
+[Qodo PR-Agent](https://github.com/qodo-ai/pr-agent), including bounded handling
+of large pull requests, repository-specific context, and finding
+self-validation. This project keeps a narrower scope and adds its own strict
+JSON contract, digest binding, fail-closed execution, evaluation corpus, and
+telemetry privacy controls. No PR-Agent source code is included.
 
 ## Development
 
-```bash
+```sh
 npm run typecheck
 npm test
 npm run build
 npm audit --audit-level=high
 ```
 
-Unit tests use injected process results and never call a model or network service.
-
-## Scope
-
-This repository contains only the review agent. Evaluation datasets, judge models, score aggregation, and benchmark dashboards belong in a separate evaluation system.
+Unit tests use injected process results and do not call a model or network
+service.
 
 ## License
 
