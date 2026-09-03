@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="650" viewBox="0 0 1200 650" role="img" aria-labelledby="title description">
+  <title id="title">Pull request review agent flow</title>
+  <desc id="description">A GitHub pull request diff is bounded, reviewed through a model gateway, strictly validated, and published with privacy-filtered telemetry.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#07121f"/>
+      <stop offset="1" stop-color="#172554"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset="1" stop-color="#818cf8"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#67e8f9"/>
+    </marker>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="8" stdDeviation="9" flood-color="#020617" flood-opacity="0.55"/>
+    </filter>
+    <style>
+      .title { fill: #f8fafc; font: 700 30px Inter, ui-sans-serif, system-ui, sans-serif; }
+      .subtitle { fill: #94a3b8; font: 400 15px Inter, ui-sans-serif, system-ui, sans-serif; }
+      .step { fill: #f8fafc; font: 650 16px Inter, ui-sans-serif, system-ui, sans-serif; }
+      .detail { fill: #cbd5e1; font: 400 13px Inter, ui-sans-serif, system-ui, sans-serif; }
+      .caption { fill: #94a3b8; font: 500 12px Inter, ui-sans-serif, system-ui, sans-serif; }
+      .card { fill: #11233a; stroke: #36546f; stroke-width: 1.5; filter: url(#shadow); }
+      .flow { fill: none; stroke: #67e8f9; stroke-width: 2.2; marker-end: url(#arrow); }
+      .safe { fill: none; stroke: #c084fc; stroke-width: 2; stroke-dasharray: 7 6; marker-end: url(#arrow); }
+    </style>
+  </defs>
+  <rect width="1200" height="650" rx="24" fill="url(#bg)"/>
+  <text x="52" y="58" class="title">Pull request review agent</text>
+  <text x="52" y="84" class="subtitle">Security-focused review with strict boundaries before and after the model</text>
+  <rect x="52" y="112" width="1096" height="6" rx="3" fill="url(#accent)"/>
+
+  <rect class="card" x="52" y="164" width="174" height="150" rx="16"/>
+  <circle cx="84" cy="196" r="17" fill="#164e63" stroke="#22d3ee"/>
+  <text x="79" y="202" class="step">1</text>
+  <text x="75" y="238" class="step">Detect</text>
+  <text x="75" y="264" class="detail">New PR head SHA</text>
+  <text x="75" y="286" class="detail">Idempotent marker</text>
+
+  <rect class="card" x="284" y="164" width="174" height="150" rx="16"/>
+  <circle cx="316" cy="196" r="17" fill="#164e63" stroke="#22d3ee"/>
+  <text x="311" y="202" class="step">2</text>
+  <text x="307" y="238" class="step">Bound</text>
+  <text x="307" y="264" class="detail">Validate unified diff</text>
+  <text x="307" y="286" class="detail">Hash and partition</text>
+
+  <rect class="card" x="516" y="164" width="174" height="150" rx="16"/>
+  <circle cx="548" cy="196" r="17" fill="#312e81" stroke="#818cf8"/>
+  <text x="543" y="202" class="step">3</text>
+  <text x="539" y="238" class="step">Review</text>
+  <text x="539" y="264" class="detail">Security and correctness</text>
+  <text x="539" y="286" class="detail">Generic model gateway</text>
+
+  <rect class="card" x="748" y="164" width="174" height="150" rx="16"/>
+  <circle cx="780" cy="196" r="17" fill="#312e81" stroke="#818cf8"/>
+  <text x="775" y="202" class="step">4</text>
+  <text x="771" y="238" class="step">Verify</text>
+  <text x="771" y="264" class="detail">Exact JSON schema</text>
+  <text x="771" y="286" class="detail">Digest and file checks</text>
+
+  <rect class="card" x="980" y="164" width="168" height="150" rx="16"/>
+  <circle cx="1012" cy="196" r="17" fill="#14532d" stroke="#4ade80"/>
+  <text x="1007" y="202" class="step">5</text>
+  <text x="1003" y="238" class="step">Publish</text>
+  <text x="1003" y="264" class="detail">Review comment</text>
+  <text x="1003" y="286" class="detail">Commit status</text>
+
+  <path class="flow" d="M 226 239 L 284 239"/>
+  <path class="flow" d="M 458 239 L 516 239"/>
+  <path class="flow" d="M 690 239 L 748 239"/>
+  <path class="flow" d="M 922 239 L 980 239"/>
+
+  <rect x="284" y="378" width="638" height="112" rx="16" fill="#151b3a" stroke="#6d4fb3" stroke-width="1.5"/>
+  <text x="313" y="414" class="step">Untrusted-input boundary</text>
+  <text x="313" y="442" class="detail">Diffs and repository guidance can influence review priorities, but cannot change the output contract.</text>
+  <text x="313" y="466" class="detail">Invalid output gets one format-only retry, then fails closed. No clean result is invented.</text>
+
+  <rect x="284" y="530" width="638" height="72" rx="16" fill="#151b3a" stroke="#6d4fb3" stroke-width="1.5"/>
+  <text x="313" y="562" class="step">Metadata-only telemetry</text>
+  <text x="313" y="584" class="detail">Latency, status, model alias, and byte counts. No prompt, diff, completion, token, or endpoint.</text>
+  <path class="safe" d="M 603 314 L 603 378"/>
+  <path class="safe" d="M 603 490 L 603 530"/>
+
+  <text x="52" y="630" class="caption">The CLI supports local diffs and remote PRs. The watcher adds continuous, head-specific automation.</text>
+</svg>

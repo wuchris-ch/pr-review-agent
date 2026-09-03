@@ -1,0 +1,42 @@
+{
+  "name": "@wuchris-ch/pr-review-agent",
+  "version": "0.1.0",
+  "description": "A structured security and correctness review agent for unified diffs.",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "pr-review": "dist/review.js",
+    "pr-review-pr": "dist/pr.js",
+    "pr-review-agent": "dist/cli.js",
+    "pr-review-watch": "dist/watcher.js"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "review": "node dist/cli.js",
+    "watch": "node dist/watcher.js",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "verify": "npm run typecheck && npm test && npm run build"
+  },
+  "dependencies": {
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.221.0",
+    "@opentelemetry/sdk-node": "^0.221.0",
+    "@opentelemetry/sdk-trace-node": "^2.10.0",
+    "valibot": "^1.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.10",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}
