@@ -9,7 +9,10 @@ exact unified diff, runs a bounded model review, validates every verdict against
 a strict contract, and produces machine-readable findings suitable for local
 development, CI, or continuous GitHub review.
 
-![Pull request review agent architecture](docs/pr-review-flow.svg)
+[![Pull request review agent architecture](docs/pr-review-flow.svg)](https://wuchris-ch.github.io/pr-review-agent/)
+
+[Open the interactive architecture explorer](https://wuchris-ch.github.io/pr-review-agent/)
+to zoom, pan, and use full screen without losing detail.
 
 ## Validated quality
 

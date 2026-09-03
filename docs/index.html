@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Interactive architecture diagram for the PR Review Agent.">
+    <meta name="theme-color" content="#f8fafc">
+    <title>PR Review Agent Architecture</title>
+    <link rel="stylesheet" href="viewer.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="./" aria-label="PR Review Agent architecture home">
+        <span class="brand-mark" aria-hidden="true">PR</span>
+        <span>
+          <strong>PR Review Agent</strong>
+          <small>Architecture explorer</small>
+        </span>
+      </a>
+      <div class="header-links">
+        <a href="https://github.com/wuchris-ch/pr-review-agent">Repository</a>
+        <a href="https://wuchris-ch.github.io/agent-eval-k3s/">Evaluation platform</a>
+      </div>
+    </header>
+
+    <nav class="diagram-nav" aria-label="Architecture diagrams">
+      <button class="diagram-tab is-active" type="button"
+        data-diagram="reviewer"
+        data-src="pr-review-flow.svg"
+        data-width="1440"
+        data-height="850"
+        data-title="Pull-request review pipeline"
+        data-description="How untrusted diffs become bounded model requests, contract-validated verdicts, privacy-safe telemetry, and restart-safe GitHub reviews.">
+        Review pipeline
+      </button>
+    </nav>
+
+    <main class="viewer-shell">
+      <section class="diagram-heading" aria-live="polite">
+        <div>
+          <p class="eyebrow">Interactive system map</p>
+          <h1 id="diagram-title">Pull-request review pipeline</h1>
+        </div>
+        <p id="diagram-description">How untrusted diffs become bounded model requests, contract-validated verdicts, privacy-safe telemetry, and restart-safe GitHub reviews.</p>
+      </section>
+
+      <section class="diagram-stage" id="diagram-stage" aria-label="Interactive architecture diagram">
+        <div class="diagram-canvas" id="diagram-canvas">
+          <img id="diagram-image" src="pr-review-flow.svg" width="1440" height="850" alt="PR Review Agent architecture" draggable="false">
+        </div>
+
+        <div class="viewer-controls" role="group" aria-label="Diagram controls">
+          <button type="button" data-action="zoom-out" aria-label="Zoom out">−</button>
+          <output id="zoom-level" aria-live="polite">100%</output>
+          <button type="button" data-action="zoom-in" aria-label="Zoom in">+</button>
+          <span class="control-divider" aria-hidden="true"></span>
+          <button class="text-control" type="button" data-action="fit">Fit</button>
+          <button class="text-control" type="button" data-action="fullscreen">Full screen</button>
+        </div>
+
+        <p class="interaction-hint">Drag to move <span>•</span> Scroll or pinch to zoom <span>•</span> Press 0 to fit</p>
+      </section>
+    </main>
+
+    <script src="viewer.js"></script>
+  </body>
+</html>
