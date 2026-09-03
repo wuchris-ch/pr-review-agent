@@ -157,6 +157,10 @@ On success, standard output contains only the JSON verdict. Diagnostics go to st
 
 Input must be valid UTF-8 and is capped at 1 MiB. The SHA-256 is computed from the exact input bytes before decoding. Large multi-file diffs are divided at file boundaries into bounded model requests, then merged deterministically. A single file that cannot fit in one request fails closed. Repository guidance is capped at 16 KiB. Model output is capped at 1 MiB per request, and each request is capped at 120 seconds.
 
+The model client retries one transient timeout, rate limit, network failure, or
+server error within the same 120-second fail-closed boundary. Authentication,
+request-shape, and invalid-output failures are not retried.
+
 An evaluator may set `AGENT_EVAL_FEEDBACK` for a retry. Nonempty feedback is supplied to the model as additional review guidance without changing the diff or output schema. The CLI never prints feedback, case identifiers, expected findings, or scoring thresholds.
 
 The model child receives only system essentials, the required gateway variables,

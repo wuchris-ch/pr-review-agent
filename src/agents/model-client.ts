@@ -4,11 +4,15 @@ import { SpanStatusCode, trace, type Span } from '@opentelemetry/api';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-node';
+import { isRetryableHttpStatus, retryDelayMs } from './retry-policy.js';
 import { REVIEW_SYSTEM_PROMPT } from './system-prompt.js';
 
 const MAX_INPUT_BYTES = 128 * 1024;
 const MAX_RESPONSE_BYTES = 1024 * 1024;
-const REQUEST_TIMEOUT_MS = 110_000;
+const REQUEST_TIMEOUT_MS = 50_000;
+const MAX_REQUEST_ATTEMPTS = 2;
+
+class RetryableModelRequestError extends Error {}
 
 interface ChatCompletion {
   choices?: Array<{
@@ -72,54 +76,76 @@ async function requestReview(
   model: string,
   span: Span,
 ): Promise<string> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const url = completionsUrl(baseUrl);
   span.setAttributes({
     'gen_ai.operation.name': 'chat',
     'gen_ai.request.model': model,
     'review.input_bytes': Buffer.byteLength(input, 'utf8'),
   });
 
-  try {
-    const response = await fetch(completionsUrl(baseUrl), {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${apiKey}`,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: REVIEW_SYSTEM_PROMPT },
-          { role: 'user', content: input },
-        ],
-        max_tokens: 4096,
-        temperature: 0,
-      }),
-      signal: controller.signal,
-    });
-    span.setAttribute('http.response.status_code', response.status);
-    const body = await responseBody(response);
-    if (!response.ok) {
-      throw new Error(`model gateway returned HTTP ${String(response.status)}`);
-    }
-    let parsed: ChatCompletion;
+  for (let attempt = 1; attempt <= MAX_REQUEST_ATTEMPTS; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     try {
-      parsed = JSON.parse(body) as ChatCompletion;
-    } catch {
-      throw new Error('model gateway returned invalid JSON');
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${apiKey}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: REVIEW_SYSTEM_PROMPT },
+            { role: 'user', content: input },
+          ],
+          max_tokens: 4096,
+          temperature: 0,
+        }),
+        signal: controller.signal,
+      });
+      span.setAttribute('http.response.status_code', response.status);
+      const body = await responseBody(response);
+      if (!response.ok) {
+        const ErrorType = isRetryableHttpStatus(response.status)
+          ? RetryableModelRequestError
+          : Error;
+        throw new ErrorType(`model gateway returned HTTP ${String(response.status)}`);
+      }
+      let parsed: ChatCompletion;
+      try {
+        parsed = JSON.parse(body) as ChatCompletion;
+      } catch {
+        throw new Error('model gateway returned invalid JSON');
+      }
+      span.setAttributes({
+        'review.request_attempts': attempt,
+        'review.request_retried': attempt > 1,
+      });
+      span.setStatus({ code: SpanStatusCode.OK });
+      return outputText(parsed);
+    } catch (error) {
+      const retryable = error instanceof RetryableModelRequestError
+        || (error instanceof Error && error.name === 'AbortError')
+        || error instanceof TypeError;
+      if (retryable && attempt < MAX_REQUEST_ATTEMPTS) {
+        await new Promise((resolve) => setTimeout(resolve, retryDelayMs(attempt)));
+        continue;
+      }
+      span.setAttributes({
+        'review.request_attempts': attempt,
+        'review.request_retried': attempt > 1,
+      });
+      span.setStatus({ code: SpanStatusCode.ERROR });
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('model gateway request timed out');
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
     }
-    span.setStatus({ code: SpanStatusCode.OK });
-    return outputText(parsed);
-  } catch (error) {
-    span.setStatus({ code: SpanStatusCode.ERROR });
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('model gateway request timed out');
-    }
-    throw error;
-  } finally {
-    clearTimeout(timeout);
   }
+  throw new Error('model gateway request failed');
 }
 
 async function main(): Promise<void> {
