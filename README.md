@@ -52,76 +52,41 @@ so the reviewed agent cannot see the goldens or alter its grade. See the
 - **Privacy-aware telemetry.** OpenTelemetry captures operational metadata, not
   source diffs, prompts, completions, credentials, endpoints, or usernames.
 
-## Quick start
+## Technology stack
 
-Requirements:
+| Layer | Technology | Responsibility |
+|---|---|---|
+| Runtime | Node.js 22, TypeScript | A small, typed CLI and continuous worker with no web framework or application server |
+| Model boundary | OpenAI-compatible gateway, isolated child process | Sends bounded review partitions through standard input with an allowlisted environment and hard timeouts |
+| Validation | Valibot, strict JSON parser, SHA-256 binding | Rejects malformed output, duplicate keys, invented files, inconsistent severity, and verdicts for the wrong diff |
+| GitHub automation | GitHub REST API, GitHub CLI, head-SHA markers | Discovers pull requests, posts structured review comments, sets commit status, and prevents duplicate reviews after restarts |
+| Orchestration | k3s and Kubernetes through the companion platform | Keeps the reviewer running as a restart-safe worker that checks configured repositories every 60 seconds |
+| Observability | OpenTelemetry Node SDK, OTLP, Collector, Phoenix | Traces model latency, attempts, byte counts, and outcomes without exporting source diffs, prompts, or completions |
+| Independent evaluation | Python harness, deterministic goldens, DeepEval GEval | Measures exact findings, blocker recall, clean-diff accuracy, correction behavior, and cross-trial stability outside the agent |
+| Quality engineering | Vitest, TypeScript compiler, npm audit, GitHub Actions | Exercises failure boundaries, validates types and builds, and checks dependencies continuously |
 
-- Node.js 22 or newer
-- An OpenAI-compatible model gateway
-- GitHub CLI authenticated with `gh auth login` for remote PR commands
+### Autonomous review loop
 
-```sh
-npm ci
-npm run build
-npm link
+The agent can run locally for one review, but its production-shaped mode is a
+long-lived Kubernetes worker managed by the companion
+[`agent-eval-k3s`](https://github.com/wuchris-ch/agent-eval-k3s) platform. It
+detects a new pull-request revision, binds the exact diff to a digest, partitions
+large changes, collects a bounded model verdict, validates the contract, and
+publishes both a review comment and commit status.
+
+```text
+GitHub PR -> watcher -> exact diff + SHA-256 -> bounded model review
+                                                   |
+                  GitHub status + comment <- strict verdict validation
+                                                   |
+                                      OpenTelemetry -> Collector -> Phoenix
+
+Golden corpus -> independent evaluator -> deterministic gates + GEval -> release grade
 ```
 
-Configure the model gateway through your shell or local secret manager:
-
-```sh
-export MODEL_GATEWAY_API_KEY="..."
-export MODEL_GATEWAY_BASE_URL="https://gateway.example/v1"
-export REVIEW_AGENT_MODEL="your-model-id"
-```
-
-### Review the current branch
-
-From any Git repository:
-
-```sh
-pr-review
-```
-
-The command compares the current branch and working tree with `origin/main` and
-uses a root `AGENTS.md` when present. Override the base only when needed:
-
-```sh
-pr-review --base develop
-```
-
-### Review an existing GitHub PR
-
-```sh
-pr-review-pr 42
-```
-
-This fetches the PR diff without switching branches or changing the working
-tree. It prints locally by default. Publishing is explicit:
-
-```sh
-pr-review-pr 42 --publish
-pr-review-pr 42 --repo owner/repository --publish
-```
-
-Publishing creates a non-approving review comment. It never merges, approves,
-or requests changes.
-
-### Run continuous reviews
-
-```sh
-export GITHUB_TOKEN="..."
-export GITHUB_REPOSITORIES="owner/one,owner/two"
-pr-review-watch
-```
-
-The watcher polls every 60 seconds, reviews each new PR head SHA once per policy
-version, posts a comment, and sets `PR review agent` to success or failure. A
-model or contract failure produces an error status and is retried on the next
-poll.
-
-The companion evaluation repository provides the complete local k3s deployment
-with Kubernetes Secrets, automatic restarts, nightly evaluation, persistent
-reports, OpenTelemetry, and Phoenix.
+The watcher is idempotent across restarts, fails closed when it cannot establish
+a trustworthy verdict, and is continuously checked by a separate evaluator the
+agent cannot inspect or modify.
 
 ## Verdict contract
 
