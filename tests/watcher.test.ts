@@ -12,7 +12,7 @@ describe('pull request watcher', () => {
     expect(() => parseRepositories('')).toThrow(/owner\/repository/);
   });
 
-  it('adds a head-specific idempotency marker to published reviews', () => {
+  it('adds a head-specific, policy-versioned idempotency marker', () => {
     const review: Review = {
       schema_version: '1.0',
       input_sha256: 'a'.repeat(64),
@@ -25,6 +25,6 @@ describe('pull request watcher', () => {
     const body = formatAutomatedReview(review, headSha);
 
     expect(body).toContain('No findings.');
-    expect(body).toContain(`<!-- pr-review-agent head:${headSha} -->`);
+    expect(body).toContain(`<!-- pr-review-agent head:${headSha} policy:1 -->`);
   });
 });

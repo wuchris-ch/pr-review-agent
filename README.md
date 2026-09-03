@@ -115,9 +115,10 @@ When `--repo` targets a repository that is not checked out, no local
 ### Continuous pull request reviews
 
 `pr-review-watch` polls a comma-separated repository list and reviews each new
-pull request head SHA once. It publishes a review comment and a commit status,
-then recognizes its head-specific marker after restarts so it does not
-duplicate the same review.
+pull request head SHA once per review-policy version. It publishes a review
+comment and commit status, then recognizes its versioned marker after restarts
+so it does not duplicate the same review. Updating the policy version allows a
+corrected policy to re-check an unchanged head.
 
 ```bash
 export GITHUB_TOKEN="..."
